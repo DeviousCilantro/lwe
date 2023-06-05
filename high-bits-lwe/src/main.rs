@@ -54,7 +54,7 @@ fn encrypt_plaintext(plaintext: Integer, k: &[Integer], q: &Integer, delta: u64)
     (a, b)
 }
 
-fn decrypt_ciphertext(ciphertext: (Vec<Integer>, Integer), q: Integer, k: &[Integer], delta: u64) -> Integer {
+fn decrypt_ciphertext(ciphertext: (Vec<Integer>, Integer), q: &Integer, k: &[Integer], delta: u64) -> Integer {
     let (a, b) = ciphertext;
     let mut dot_product = Integer::from(0);
     for i in 0..512 {
@@ -64,14 +64,14 @@ fn decrypt_ciphertext(ciphertext: (Vec<Integer>, Integer), q: Integer, k: &[Inte
     x.div_rem_round(Integer::from(delta)).0
 }
 
-fn verify_homomorphism(m1: Integer, m2: Integer, key: &[Integer], q: &Integer, delta: u64) {
+fn verify_homomorphism(m1: &Integer, m2: &Integer, key: &[Integer], q: &Integer, delta: u64) {
     let sum = m1.clone() + m2.clone();
-    let (a1, b1) = encrypt_plaintext(m1.clone(), key.clone(), &q, delta);
-    let (a2, b2) = encrypt_plaintext(m2.clone(), key.clone(), &q, delta);
-    assert_eq!(decrypt_ciphertext((a1.clone(), b1.clone()), q.clone(), &key, delta), m1.clone(), "Correctness not verified");
-    assert_eq!(decrypt_ciphertext((a2.clone(), b2.clone()), q.clone(), &key, delta), m2.clone(), "Correctness not verified");
-    assert_eq!(decrypt_ciphertext((a1.clone(), b1.clone() + (Integer::from(delta) * m2.clone())), q.clone(), &key, delta), sum.clone(), "Not additively homomorphic");
-    assert_eq!(decrypt_ciphertext((a2.clone(), b2.clone() + (Integer::from(delta) * m1.clone())), q.clone(), &key, delta), sum.clone(), "Not additively homomorphic");
+    let (a1, b1) = encrypt_plaintext(m1.clone(), key, q, delta);
+    let (a2, b2) = encrypt_plaintext(m2.clone(), key, q, delta);
+    assert_eq!(decrypt_ciphertext((a1.clone(), b1.clone()), q, key, delta), *m1, "Correctness not verified");
+    assert_eq!(decrypt_ciphertext((a2.clone(), b2.clone()), q, key, delta), *m2, "Correctness not verified");
+    assert_eq!(decrypt_ciphertext((a1, b1 + (Integer::from(delta) * m2)), q, key, delta), sum, "Not additively homomorphic");
+    assert_eq!(decrypt_ciphertext((a2, b2 + (Integer::from(delta) * m1)), q, key, delta), sum, "Not additively homomorphic");
     println!("\nAdditive homomorphism and correctness verified.");
 }
 
@@ -92,7 +92,7 @@ fn main() {
     }
     encoded_ciphertext.1 = base64::encode(ciphertext.1.to_string());
     println!("\nEncrypted ciphertext: {encoded_ciphertext:?}");
-    let output_plaintext = decrypt_ciphertext(ciphertext, q.clone(), &key, delta);
+    let output_plaintext = decrypt_ciphertext(ciphertext, &q, &key, delta);
     let output_plaintext = format!("{:X}", &output_plaintext);
     println!("\nDecrypted plaintext: {}", String::from_utf8(hex::decode(output_plaintext).unwrap()).unwrap());
     println!("\nEnter two strings to verify additive homomorphism: ");
@@ -112,6 +112,6 @@ fn main() {
         .unwrap();
     let input = input.trim();
     let m2 = Integer::from_str_radix(&hex::encode(input), 16).unwrap();
-    verify_homomorphism(m1.clone(), m2.clone(), &key, &q, delta);
+    verify_homomorphism(&m1, &m2, &key, &q, delta);
 
 }
