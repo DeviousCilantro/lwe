@@ -1,12 +1,14 @@
 use std::io::{self, Write};
 use ::rand::Rng;
 use ::rand::distributions::Uniform;
-use rug::{Integer, rand};
+use rug::Integer;
+use ring::rand::{SystemRandom, SecureRandom};
 use num_primes::Generator;
 
 fn generate_sk() -> (Vec<Integer>, Vec<(Vec<Integer>, Integer)>, u64, Integer, Integer) {
     let mut sk: Vec<Integer> = Vec::new();
     let mut pk: Vec<(Vec<Integer>, Integer)> = Vec::new();
+    let rand = SystemRandom::new();
     let p = Integer::from_str_radix(&Generator::safe_prime(506).to_string(), 10).unwrap();
     let mut q;
     loop {
@@ -16,9 +18,8 @@ fn generate_sk() -> (Vec<Integer>, Vec<(Vec<Integer>, Integer)>, u64, Integer, I
         };
     }
     let delta: u64 = (q.clone().div_rem_round(p.clone()).0).to_u64().unwrap();
-    let mut rand = rand::RandState::new();
     for _ in 0..512 {
-        sk.push(q.clone().random_below(&mut rand));
+        sk.push(random_integer(&rand, q.clone()));
     }
     for _ in 0..8192 {
         pk.push(encrypt_plaintext(&Integer::from(0), &sk, &q, &p, delta));
@@ -26,21 +27,32 @@ fn generate_sk() -> (Vec<Integer>, Vec<(Vec<Integer>, Integer)>, u64, Integer, I
     (sk, pk, delta, q, p)
 }
 
+fn random_integer(rng: &SystemRandom, range: Integer) -> Integer {
+    loop {
+        let mut bytes = vec![0; ((range.significant_bits() + 7) / 8) as usize];
+        rng.fill(&mut bytes).unwrap();
+        let num = Integer::from_digits(&bytes, rug::integer::Order::Lsf);
+        if num < range {
+            return num;
+        }
+    }
+}
+
 fn sample_error(delta: u64, rng: &mut impl Rng) -> i64 {
     let half_delta: f64 = (delta / 2) as f64;
     let half_delta: i64 = half_delta.round() as i64;
     let lower_bound: i64 = 0 - half_delta;
     let upper_bound: i64 = half_delta;
-    let range = Uniform::new(lower_bound, upper_bound);
+    let range = Uniform::new_inclusive(lower_bound, upper_bound);
     rng.sample(range)
 }
 
 fn encrypt_plaintext(plaintext: &Integer, k: &[Integer], q: &Integer, p: &Integer, delta: u64) -> (Vec<Integer>, Integer) {
     let mut a: Vec<Integer> = Vec::new();
-    let mut rand = rand::RandState::new();
+    let rand = SystemRandom::new();
     let mut rng = ::rand::thread_rng();
     for _ in 0..512 {
-        a.push(q.clone().random_below(&mut rand));
+        a.push(random_integer(&rand, q.clone()));
     }
     let mut e;
     loop {
@@ -116,7 +128,7 @@ fn verify_homomorphism(m1: &Integer, m2: &Integer, sk: &[Integer], q: &Integer, 
 }
 
 fn main() {
-    print!("Enter the plaintext: ");
+    print!("\nEnter the plaintext: ");
     let mut input = String::new();
     io::stdout().flush().unwrap();
     io::stdin()
